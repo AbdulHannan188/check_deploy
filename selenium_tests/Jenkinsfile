@@ -7,7 +7,7 @@ pipeline {
         SOURCE_BRANCH      = 'dev'
         TARGET_BRANCH      = 'main'
         PYTHON_VERSION     = 'python3'
-        VENV_DIR           = 'selenium_tests/.venv'        // ← inside selenium_tests
+        VENV_DIR           = 'selenium_tests/.venv'
     }
 
     options {
@@ -20,7 +20,6 @@ pipeline {
     }
 
     stages {
-        // ── 1. Checkout ──────────────────────────────────────────────
         stage('Checkout') {
             steps {
                 checkout scm
@@ -29,12 +28,17 @@ pipeline {
                         script: 'git rev-parse --short HEAD',
                         returnStdout: true
                     ).trim()
+                    // ── Capture pusher email ──────────────────────────
+                    env.PUSHER_EMAIL = sh(
+                        script: 'git log -1 --format="%ae"',
+                        returnStdout: true
+                    ).trim()
                 }
-                echo "▶ Building commit: ${env.GIT_COMMIT_SHORT}"
+                echo "▶ Commit: ${env.GIT_COMMIT_SHORT}"
+                echo "▶ Pushed by: ${env.PUSHER_EMAIL}"
             }
         }
 
-        // ── 2. Setup Python venv ─────────────────────────────────────
         stage('Setup Python Environment') {
             steps {
                 sh """
@@ -46,16 +50,13 @@ pipeline {
             }
         }
 
-        // ── 3. Start Vite + Run Tests ────────────────────────────────
         stage('Run Tests') {
             steps {
                 sh """
-                    # Start Vite from project root
                     npm install
                     npm run dev -- --host 0.0.0.0 --port 5173 &
                     echo \$! > vite.pid
 
-                    # Wait up to 60s for Vite
                     echo "Waiting for Vite on port 5173..."
                     for i in \$(seq 1 30); do
                         if nc -z localhost 5173 2>/dev/null; then
@@ -68,7 +69,6 @@ pipeline {
 
                     nc -z localhost 5173 || { echo "❌ Vite never started!"; exit 1; }
 
-                    # Run pytest from selenium_tests directory
                     . ${VENV_DIR}/bin/activate
                     BASE_URL=http://localhost:5173 pytest selenium_tests/tests/ \
                         --junitxml=selenium_tests/test-results/results.xml \
@@ -95,7 +95,6 @@ pipeline {
             }
         }
 
-        // ── 4. Merge dev → main ──────────────────────────────────────
         stage('Merge dev → main') {
             when {
                 expression {
@@ -136,9 +135,46 @@ pipeline {
         success {
             echo "✅ Pipeline SUCCESS — code merged to ${TARGET_BRANCH}"
         }
+
         failure {
-            echo '❌ Pipeline FAILED — merge blocked'
+            script {
+                if (!env.PUSHER_EMAIL) {
+                    env.PUSHER_EMAIL = sh(
+                        script: 'git log -1 --format="%ae"',
+                        returnStdout: true
+                    ).trim()
+                }
+            }
+            emailext(
+                to: "${env.PUSHER_EMAIL}",
+                subject: "❌ Jenkins Build FAILED — ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """
+                    <html>
+                    <body>
+                        <h2 style="color:red;">❌ Build Failed — Tests Did Not Pass</h2>
+                        <table border="1" cellpadding="8" cellspacing="0">
+                            <tr><td><b>Job</b></td><td>${env.JOB_NAME}</td></tr>
+                            <tr><td><b>Build Number</b></td><td>#${env.BUILD_NUMBER}</td></tr>
+                            <tr><td><b>Branch</b></td><td>${SOURCE_BRANCH}</td></tr>
+                            <tr><td><b>Commit</b></td><td>${env.GIT_COMMIT_SHORT}</td></tr>
+                            <tr><td><b>Pushed By</b></td><td>${env.PUSHER_EMAIL}</td></tr>
+                            <tr><td><b>Status</b></td><td style="color:red;">FAILED</td></tr>
+                        </table>
+                        <br/>
+                        <p>⚠️ Your code was <b>NOT merged</b> into <b>${TARGET_BRANCH}</b> because tests failed.</p>
+                        <p>Please fix the failing tests and push again.</p>
+                        <br/>
+                        <a href="${env.BUILD_URL}">👉 Click here to see full build logs</a>
+                        <br/><br/>
+                        <p style="color:gray;">— Jenkins CI</p>
+                    </body>
+                    </html>
+                """,
+                mimeType: 'text/html',
+                attachLog: true
+            )
         }
+
         cleanup {
             sh "rm -rf ${VENV_DIR} selenium_tests/test-results"
         }
