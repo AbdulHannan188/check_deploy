@@ -7,10 +7,10 @@ export default defineConfig({
   plugins: [react(),tailwindcss()],
 })
 
-// vite.config.js
-export default {
-  server: {
-    port: 5173,
-    host: '0.0.0.0'   // ← important for Jenkins to reach it
-  }
-}
+// // vite.config.js
+// export default {
+//   server: {
+//     port: 5173,
+//     host: '0.0.0.0'   // ← important for Jenkins to reach it
+//   }
+// }
