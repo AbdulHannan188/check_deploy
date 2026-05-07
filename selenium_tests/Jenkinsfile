@@ -7,7 +7,7 @@ pipeline {
         SOURCE_BRANCH      = 'dev'
         TARGET_BRANCH      = 'main'
         PYTHON_VERSION     = 'python3'
-        VENV_DIR           = 'se_tests/.venv'        // ← inside se_tests
+        VENV_DIR           = 'selenium_tests/.venv'        // ← inside selenium_tests
     }
 
     options {
@@ -41,7 +41,7 @@ pipeline {
                     ${PYTHON_VERSION} -m venv ${VENV_DIR}
                     . ${VENV_DIR}/bin/activate
                     pip install --upgrade pip
-                    pip install -r se_tests/requirements.txt
+                    pip install -r selenium_tests/requirements.txt
                 """
             }
         }
@@ -68,11 +68,11 @@ pipeline {
 
                     nc -z localhost 5173 || { echo "❌ Vite never started!"; exit 1; }
 
-                    # Run pytest from se_tests directory
+                    # Run pytest from selenium_tests directory
                     . ${VENV_DIR}/bin/activate
-                    BASE_URL=http://localhost:5173 pytest se_tests/tests/ \
-                        --junitxml=se_tests/test-results/results.xml \
-                        --html=se_tests/test-results/report.html \
+                    BASE_URL=http://localhost:5173 pytest selenium_tests/tests/ \
+                        --junitxml=selenium_tests/test-results/results.xml \
+                        --html=selenium_tests/test-results/report.html \
                         --self-contained-html \
                         -v
                 """
@@ -82,12 +82,12 @@ pipeline {
                     sh "[ -f vite.pid ] && kill \$(cat vite.pid) 2>/dev/null || true"
                     sh 'rm -f vite.pid'
                     junit allowEmptyResults: true,
-                          testResults: 'se_tests/test-results/results.xml'
+                          testResults: 'selenium_tests/test-results/results.xml'
                     publishHTML(target: [
                         allowMissing         : false,
                         alwaysLinkToLastBuild: true,
                         keepAll              : true,
-                        reportDir            : 'se_tests/test-results',
+                        reportDir            : 'selenium_tests/test-results',
                         reportFiles          : 'report.html',
                         reportName           : 'Pytest Report'
                     ])
@@ -140,7 +140,7 @@ pipeline {
             echo '❌ Pipeline FAILED — merge blocked'
         }
         cleanup {
-            sh "rm -rf ${VENV_DIR} se_tests/test-results"
+            sh "rm -rf ${VENV_DIR} selenium_tests/test-results"
         }
     }
 }
