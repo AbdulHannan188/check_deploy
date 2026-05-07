@@ -1,0 +1,1 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites><testsuite name="pytest" errors="0" failures="0" skipped="0" tests="1" time="2.649" timestamp="2026-05-07T12:52:51.460018+05:00" hostname="hanan-Lenovo-V14-G3-IAP"><testcase classname="tests.test_main" name="test_text" time="2.629" /></testsuite></testsuites>
